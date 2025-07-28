@@ -1,0 +1,306 @@
+#include <Arduino.h>
+#include <Wire.h>
+
+uint32_t LoopTimer;
+
+float RatePitch, RateRoll, RateYaw;
+float RateCalibrationPitch, RateCalibrationRoll, RateCalibrationYaw;
+
+volatile uint32_t lastRiseThrottle = 0, lastRiseRoll = 0, lastRisePitch = 0, lastRiseYaw = 0;
+volatile unsigned long InputThrottle = 0, DesiredRoll = 0, DesiredPitch = 0, DesiredYaw = 0;
+
+#define RX_THROTTLE_PWM_PIN 2
+#define RX_ROLL_PWM_PIN 3
+#define RX_PITCH_PWM_PIN 4
+#define RX_YAW_PWM_PIN 5
+
+float DesiredRatePitch, DesiredRateRoll, DesiredRateYaw;
+
+float ErrorRateRoll, ErrorRatePitch, ErrorRateYaw;
+
+float PIDReturn[] = {0, 0, 0};
+
+float InputRoll, InputPitch, InputYaw;
+
+float PrevErrorRateRoll = 0, PrevItermRateRoll = 0;
+float PrevErrorRatePitch = 0, PrevItermRatePitch = 0;
+float PrevErrorRateYaw = 0, PrevItermRateYaw = 0;
+
+#define MOTOR_1_PWM_PIN 6
+int MotorInput1;
+#define MOTOR_2_PWM_PIN 7
+int MotorInput2;
+#define MOTOR_3_PWM_PIN 8
+int MotorInput3;
+#define MOTOR_4_PWM_PIN 9
+int MotorInput4;
+
+#define DELAY_MOTORS_SIGNAL_AFTER_MOTORS_POWER_UP 5000
+
+#define LED_PIN 13
+
+#define THROTTLE_MAX 1800
+#define MOTORS_MAX 20000
+#define THROTTLE_IDLE 1150
+
+#define PWM_FREQUENCY 250
+
+void gyro_setup() {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x6B);
+  Wire.write(0x00);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1A);
+  Wire.write(0x05);
+  Wire.endTransmission();
+
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1B);
+  Wire.write(0x08);
+  Wire.endTransmission();
+}
+
+void gyro_signals() {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x43);
+  Wire.endTransmission(); 
+  Wire.requestFrom(0x68,6);
+  int16_t GyroX=Wire.read()<<8 | Wire.read();
+  int16_t GyroY=Wire.read()<<8 | Wire.read();
+  int16_t GyroZ=Wire.read()<<8 | Wire.read();
+
+  RateRoll=(float)GyroY/65.5;
+  RatePitch=(float)GyroX/65.5;
+  RateYaw=(float)GyroZ/65.5;
+}
+
+void gyro_calibration() {
+  for (int RateCalibrationNumber=0; RateCalibrationNumber<2000; RateCalibrationNumber ++) {
+    gyro_signals();
+    RateCalibrationRoll+=RateRoll;
+    RateCalibrationPitch+=RatePitch;
+    RateCalibrationYaw+=RateYaw;
+    delay(1);
+  }
+  RateCalibrationRoll/=2000;
+  RateCalibrationPitch/=2000;
+  RateCalibrationYaw/=2000;
+}
+
+void isrThrottle() {
+  if (digitalRead(RX_THROTTLE_PWM_PIN)) {
+    lastRiseThrottle = micros();
+  } else {
+    InputThrottle = micros() - lastRiseThrottle;
+    if (InputThrottle > THROTTLE_MAX) InputThrottle = THROTTLE_MAX;
+  }
+}
+void isrRoll() {
+  if (digitalRead(RX_ROLL_PWM_PIN)) {
+    lastRiseRoll = micros();
+  } else {
+    DesiredRoll = micros() - lastRiseRoll;
+  }
+}
+void isrPitch() {
+  if (digitalRead(RX_PITCH_PWM_PIN)) {
+    lastRisePitch = micros();
+  } else {
+    DesiredPitch = micros() - lastRisePitch;
+  }
+}
+void isrYaw() {
+  if (digitalRead(RX_YAW_PWM_PIN)) {
+    lastRiseYaw = micros();
+  } else {
+    DesiredYaw = micros() - lastRiseYaw;
+  }
+}
+
+void setup() {
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, HIGH);
+
+  Serial.begin(115200);
+
+  Wire.setClock(400000);
+  Wire.begin();
+  delay(250);
+
+  gyro_setup();
+
+  gyro_calibration();
+
+  pinMode(RX_THROTTLE_PWM_PIN, INPUT);
+  pinMode(RX_ROLL_PWM_PIN, INPUT);
+  pinMode(RX_PITCH_PWM_PIN, INPUT);
+  pinMode(RX_YAW_PWM_PIN, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(RX_THROTTLE_PWM_PIN), isrThrottle, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RX_ROLL_PWM_PIN), isrRoll, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RX_PITCH_PWM_PIN), isrPitch, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RX_YAW_PWM_PIN), isrYaw, CHANGE);
+
+  pinMode(MOTOR_1_PWM_PIN, OUTPUT);
+  pinMode(MOTOR_2_PWM_PIN, OUTPUT);
+  pinMode(MOTOR_3_PWM_PIN, OUTPUT);
+  pinMode(MOTOR_4_PWM_PIN, OUTPUT);
+
+  analogWriteFrequency(MOTOR_1_PWM_PIN, PWM_FREQUENCY);
+  analogWriteFrequency(MOTOR_2_PWM_PIN, PWM_FREQUENCY);
+  analogWriteFrequency(MOTOR_3_PWM_PIN, PWM_FREQUENCY);
+  analogWriteFrequency(MOTOR_4_PWM_PIN, PWM_FREQUENCY);
+
+  analogWriteResolution(12);
+
+  // 1000 is for receiver not connected
+  // 1050 is for throttle not idle
+  while (InputThrottle > 1050 || InputThrottle < 1000) {
+    delay(20); // ELRS frequency in remote controller is 50Hz
+  }
+
+  LoopTimer=micros();
+
+  analogWrite(MOTOR_1_PWM_PIN, 1000);
+  analogWrite(MOTOR_2_PWM_PIN, 1000);
+  analogWrite(MOTOR_3_PWM_PIN, 1000);
+  analogWrite(MOTOR_4_PWM_PIN, 1000);
+
+  delay(DELAY_MOTORS_SIGNAL_AFTER_MOTORS_POWER_UP);
+
+  digitalWrite(LED_PIN, LOW);
+}
+
+void pid_equation(float Error, float P, float I, float D, float PrevError, float PrevIterm) {
+  float Pterm = P * Error;
+
+  float Iterm = PrevIterm + I * (Error + PrevError) * 0.004 / 2;
+  if (Iterm > 400) Iterm = 400;
+  else if (Iterm < -400) Iterm = -400;
+
+  float Dterm = D * (Error - PrevError) / 0.004;
+
+  float PIDOutput = Pterm + Iterm + Dterm;
+  if (PIDOutput > 400) PIDOutput = 400;
+  else if (PIDOutput < -400) PIDOutput =- 400;
+
+  PIDReturn[0] = PIDOutput;
+  PIDReturn[2] = Iterm;
+}
+
+void reset_pid(void) {
+  PrevErrorRateRoll = 0;
+  PrevItermRateRoll = 0;
+  PrevErrorRatePitch = 0;
+  PrevItermRatePitch = 0;
+  PrevErrorRateYaw = 0;
+  PrevItermRateYaw = 0;
+}
+
+void loop() {
+  gyro_signals();
+  RateRoll-=RateCalibrationRoll;
+  RatePitch-=RateCalibrationPitch;
+  RateYaw-=RateCalibrationYaw;
+
+  // physicaly inverted axis
+  RatePitch = -RatePitch;
+  RateYaw = -RateYaw;
+
+  // 0.15 of max/min of +-75 deg/sec rate
+  DesiredRateRoll = 0.15 * ((float)DesiredRoll - 1500);
+  DesiredRatePitch = 0.15 * ((float)DesiredPitch - 1500);
+  DesiredRateYaw = 0.15 * ((float)DesiredYaw - 1500);
+
+  ErrorRateRoll = DesiredRateRoll - RateRoll;
+  ErrorRatePitch = DesiredRatePitch - RatePitch;
+  ErrorRateYaw = DesiredRateYaw - RateYaw;
+
+  pid_equation(ErrorRateRoll, 0.6, 0, 0, PrevErrorRateRoll, PrevItermRateRoll);
+  InputRoll = PIDReturn[0];
+  PrevErrorRateRoll = ErrorRateRoll;
+  PrevItermRateRoll = PIDReturn[2];
+
+  pid_equation(ErrorRatePitch, 0.6, 0, 0, PrevErrorRatePitch, PrevItermRatePitch);
+  InputPitch = PIDReturn[0];
+  PrevErrorRatePitch = ErrorRatePitch;
+  PrevItermRatePitch = PIDReturn[2];
+
+  pid_equation(ErrorRateYaw, 2, 0, 0, PrevErrorRateYaw, PrevItermRateYaw);
+  InputYaw = PIDReturn[0];
+  PrevErrorRateYaw = ErrorRateYaw;
+  PrevItermRateYaw = PIDReturn[2];
+
+  MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
+  MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
+  MotorInput3 = 1.024 * (InputThrottle + InputRoll + InputPitch + InputYaw);
+  MotorInput4 = 1.024 * (InputThrottle + InputRoll - InputPitch - InputYaw);
+
+  if (MotorInput1 > MOTORS_MAX) MotorInput1 = MOTORS_MAX;
+  if (MotorInput2 > MOTORS_MAX) MotorInput2 = MOTORS_MAX;
+  if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
+  if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
+
+  if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
+  if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
+  if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
+  if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
+
+  if (InputThrottle < 1050) {
+    MotorInput1 = 1000; 
+    MotorInput2 = 1000;
+    MotorInput3 = 1000; 
+    MotorInput4 = 1000;
+    reset_pid();
+  }
+
+  analogWrite(MOTOR_1_PWM_PIN, MotorInput1);
+  analogWrite(MOTOR_2_PWM_PIN, MotorInput2);
+  analogWrite(MOTOR_3_PWM_PIN, MotorInput3);
+  analogWrite(MOTOR_4_PWM_PIN, MotorInput4);
+
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",RatePitch:" + String(RatePitch) +
+                 ",DesiredPitch:" + String(DesiredPitch) +
+                 ",DesiredRatePitch:" + String(DesiredRatePitch) +
+                 ",ErrorRatePitch:" + String(ErrorRatePitch) +
+                 ",InputPitch:" + String(InputPitch)
+  );
+
+  // Serial.println(
+  //                ",RateYaw:" + String(RateYaw) +
+  //                ",DesiredYaw:" + String(DesiredYaw) +
+  //                ",DesiredRateYaw:" + String(DesiredRateYaw) +
+  //                ",ErrorRateYaw:" + String(ErrorRateYaw) +
+  //                ",InputYaw:" + String(InputYaw)
+  // );
+
+  // Serial.println(
+  //                ",MotorInput1: " + String(MotorInput1) +
+  //                ",MotorInput2: " + String(MotorInput2) +
+  //                ",MotorInput3: " + String(MotorInput3) +
+  //                ",MotorInput4: " + String(MotorInput4)
+  // );
+
+  // Serial.println(
+  //                "RateRoll:" + String(RateRoll) +
+  //                ",DesiredRoll:" + String(DesiredRoll) +
+  //                ",DesiredRateRoll:" + String(DesiredRateRoll) +
+  //                ",ErrorRateRoll:" + String(ErrorRateRoll) +
+  //                ",InputRoll:" + String(InputRoll)
+  // );
+
+  // Serial.println(
+  //                ",InputThrottle:" + String(InputThrottle)
+  // );
+
+  // LKG value: 841 us
+  // Serial.println(String(micros() - LoopTimer));
+
+  while (micros() - LoopTimer < 4000);
+  LoopTimer = micros();
+}
