@@ -34,11 +34,11 @@
 #define P_ROLL 0.6
 #define P_PITCH 0.6
 #define P_YAW 2
-#define I_ROLL 0
-#define I_PITCH 0
-#define I_YAW 0
-#define D_ROLL 0
-#define D_PITCH 0
+#define I_ROLL 3.5
+#define I_PITCH 3.5
+#define I_YAW 12
+#define D_ROLL 0.03
+#define D_PITCH 0.03
 #define D_YAW 0
 
 uint32_t LoopTimer;
