@@ -7,8 +7,8 @@
 // #define DEBUG_RATE_ROLL
 // #define DEBUG_RATE_PITCH
 // #define DEBUG_RATE_YAW
-// #define DEBUG_INPUTS
-#define DEBUG_MOTORS
+#define DEBUG_INPUTS
+// #define DEBUG_MOTORS
 // #define DEBUG_LOOP_TIMER
 // #define DEBUG_THROTTLE
 
@@ -69,8 +69,6 @@ int MotorInput1;
 int MotorInput2;
 int MotorInput3;
 int MotorInput4;
-
-bool is_armed = false;
 
 void gyro_setup() {
   Wire.beginTransmission(0x68);
@@ -201,16 +199,20 @@ void setup() {
 
   analogWriteResolution(12);
 
+  analogWrite(MOTOR_1_PWM_PIN, MOTORS_CUTOFF);
+  analogWrite(MOTOR_2_PWM_PIN, MOTORS_CUTOFF);
+  analogWrite(MOTOR_3_PWM_PIN, MOTORS_CUTOFF);
+  analogWrite(MOTOR_4_PWM_PIN, MOTORS_CUTOFF);
+
+  Serial.println("Waiting for receiver to connect...");
+
   // 1000 is for receiver not connected
   // 1050 is for throttle not idle
-  while (InputThrottle > 1000 && InputThrottle < 1050) {
+  while (InputThrottle < 1000 || InputThrottle > 1050) {
     delay(20);
   }
 
-  analogWrite(MOTOR_1_PWM_PIN, InputThrottle);
-  analogWrite(MOTOR_2_PWM_PIN, InputThrottle);
-  analogWrite(MOTOR_3_PWM_PIN, InputThrottle);
-  analogWrite(MOTOR_4_PWM_PIN, InputThrottle);
+  Serial.println("Receiver connected, calibrating...");
 
   receiver_center_calibration();
 
@@ -264,55 +266,44 @@ void loop() {
   ErrorRatePitch = DesiredRatePitch - RatePitch;
   ErrorRateYaw = DesiredRateYaw - RateYaw;
 
-  // if (!is_armed) {
-  if (false) {
+  pid_equation(ErrorRateRoll, P_ROLL, I_ROLL, D_ROLL, PrevErrorRateRoll, PrevItermRateRoll);
+  InputRoll = PIDReturn[0];
+  PrevErrorRateRoll = ErrorRateRoll;
+  PrevItermRateRoll = PIDReturn[2];
 
-    MotorInput1 = InputThrottle;
-    MotorInput2 = InputThrottle;
-    MotorInput3 = InputThrottle;
-    MotorInput4 = InputThrottle;
+  pid_equation(ErrorRatePitch, P_PITCH, I_PITCH, D_PITCH, PrevErrorRatePitch, PrevItermRatePitch);
+  InputPitch = PIDReturn[0];
+  PrevErrorRatePitch = ErrorRatePitch;
+  PrevItermRatePitch = PIDReturn[2];
 
-  } else {
+  pid_equation(ErrorRateYaw, P_YAW, I_YAW, D_YAW, PrevErrorRateYaw, PrevItermRateYaw);
+  InputYaw = PIDReturn[0];
+  PrevErrorRateYaw = ErrorRateYaw;
+  PrevItermRateYaw = PIDReturn[2];
 
-    pid_equation(ErrorRateRoll, P_ROLL, I_ROLL, D_ROLL, PrevErrorRateRoll, PrevItermRateRoll);
-    InputRoll = PIDReturn[0];
-    PrevErrorRateRoll = ErrorRateRoll;
-    PrevItermRateRoll = PIDReturn[2];
+  MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
+  MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
+  MotorInput3 = 1.024 * (InputThrottle + InputRoll + InputPitch + InputYaw);
+  MotorInput4 = 1.024 * (InputThrottle + InputRoll - InputPitch - InputYaw);
 
-    pid_equation(ErrorRatePitch, P_PITCH, I_PITCH, D_PITCH, PrevErrorRatePitch, PrevItermRatePitch);
-    InputPitch = PIDReturn[0];
-    PrevErrorRatePitch = ErrorRatePitch;
-    PrevItermRatePitch = PIDReturn[2];
+  if (MotorInput1 > MOTORS_MAX) MotorInput1 = MOTORS_MAX;
+  if (MotorInput2 > MOTORS_MAX) MotorInput2 = MOTORS_MAX;
+  if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
+  if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
 
-    pid_equation(ErrorRateYaw, P_YAW, I_YAW, D_YAW, PrevErrorRateYaw, PrevItermRateYaw);
-    InputYaw = PIDReturn[0];
-    PrevErrorRateYaw = ErrorRateYaw;
-    PrevItermRateYaw = PIDReturn[2];
+  // TODO: currently causing motors spin very fast
+  // if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
+  // if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
+  // if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
+  // if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
 
-    MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
-    MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
-    MotorInput3 = 1.024 * (InputThrottle + InputRoll + InputPitch + InputYaw);
-    MotorInput4 = 1.024 * (InputThrottle + InputRoll - InputPitch - InputYaw);
-
-    if (MotorInput1 > MOTORS_MAX) MotorInput1 = MOTORS_MAX;
-    if (MotorInput2 > MOTORS_MAX) MotorInput2 = MOTORS_MAX;
-    if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
-    if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
-
-    // TODO: currently causing motors spin very fast
-    // if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
-    // if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
-    // if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
-    // if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
-
-    if (InputThrottle < 1050) {
-      MotorInput1 = MOTORS_CUTOFF;
-      MotorInput2 = MOTORS_CUTOFF;
-      MotorInput3 = MOTORS_CUTOFF;
-      MotorInput4 = MOTORS_CUTOFF;
-      reset_pid();
-    }
-
+  // In case RC is disconnected, set motors to InputThrottle might be harmful
+  if (InputThrottle < 1050) {
+    MotorInput1 = MOTORS_CUTOFF;
+    MotorInput2 = MOTORS_CUTOFF;
+    MotorInput3 = MOTORS_CUTOFF;
+    MotorInput4 = MOTORS_CUTOFF;
+    reset_pid();
   }
 
   analogWrite(MOTOR_1_PWM_PIN, MotorInput1);
