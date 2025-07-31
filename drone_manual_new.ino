@@ -29,7 +29,7 @@
 #define MOTORS_CUTOFF 1000
 #define THROTTLE_MAX 1500
 #define MOTORS_MAX 20000
-#define THROTTLE_IDLE 1180
+#define THROTTLE_IDLE 1050
 
 #define P_ROLL 0.6
 #define P_PITCH 0.6
@@ -113,6 +113,7 @@ void gyro_calibration() {
   RateCalibrationYaw/=2000;
 }
 
+// TODO: on rc disconnect, values may stay the same, need to implement rc connected check
 void isrThrottle() {
   if (digitalRead(RX_THROTTLE_PWM_PIN)) {
     lastRiseThrottle = micros();
@@ -298,7 +299,7 @@ void loop() {
   // if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
 
   // In case RC is disconnected, set motors to InputThrottle might be harmful
-  if (InputThrottle < 1050) {
+  if (InputThrottle < THROTTLE_IDLE) {
     MotorInput1 = MOTORS_CUTOFF;
     MotorInput2 = MOTORS_CUTOFF;
     MotorInput3 = MOTORS_CUTOFF;
