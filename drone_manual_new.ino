@@ -8,7 +8,7 @@
 // #define DEBUG_RATE_PITCH
 // #define DEBUG_RATE_YAW
 // #define DEBUG_INPUTS
-// #define DEBUG_MOTORS
+#define DEBUG_MOTORS
 // #define DEBUG_LOOP_TIMER
 // #define DEBUG_THROTTLE
 
@@ -27,18 +27,18 @@
 #define PWM_FREQUENCY 250
 
 #define MOTORS_CUTOFF 1000
-#define THROTTLE_MAX 1800
+#define THROTTLE_MAX 1500
 #define MOTORS_MAX 20000
 #define THROTTLE_IDLE 1180
 
 #define P_ROLL 0.6
 #define P_PITCH 0.6
 #define P_YAW 2
-#define I_ROLL 3.5
-#define I_PITCH 3.5
-#define I_YAW 12
-#define D_ROLL 0.03
-#define D_PITCH 0.03
+#define I_ROLL 0
+#define I_PITCH 0
+#define I_YAW 0
+#define D_ROLL 0
+#define D_PITCH 0
 #define D_YAW 0
 
 uint32_t LoopTimer;
@@ -120,6 +120,10 @@ void isrThrottle() {
     lastRiseThrottle = micros();
   } else {
     InputThrottle = micros() - lastRiseThrottle;
+    // TODO: might not be good for calibration
+    if (InputThrottle > THROTTLE_MAX) {
+      InputThrottle = THROTTLE_MAX;
+    }
   }
 }
 void isrRoll() {
@@ -161,6 +165,7 @@ void receiver_center_calibration() {
 }
 
 void setup() {
+
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, HIGH);
 
@@ -195,6 +200,12 @@ void setup() {
   analogWriteFrequency(MOTOR_4_PWM_PIN, PWM_FREQUENCY);
 
   analogWriteResolution(12);
+
+  // 1000 is for receiver not connected
+  // 1050 is for throttle not idle
+  while (InputThrottle > 1000 && InputThrottle < 1050) {
+    delay(20);
+  }
 
   analogWrite(MOTOR_1_PWM_PIN, InputThrottle);
   analogWrite(MOTOR_2_PWM_PIN, InputThrottle);
@@ -253,13 +264,8 @@ void loop() {
   ErrorRatePitch = DesiredRatePitch - RatePitch;
   ErrorRateYaw = DesiredRateYaw - RateYaw;
 
-  if (!is_armed) {
-
-    // 1000 is for receiver not connected
-    // 1050 is for throttle not idle
-    if (InputThrottle > 1000 && InputThrottle < 1050) {
-      is_armed = true;
-    }
+  // if (!is_armed) {
+  if (false) {
 
     MotorInput1 = InputThrottle;
     MotorInput2 = InputThrottle;
@@ -293,10 +299,11 @@ void loop() {
     if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
     if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
 
-    if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
-    if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
-    if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
-    if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
+    // TODO: currently causing motors spin very fast
+    // if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
+    // if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
+    // if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
+    // if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
 
     if (InputThrottle < 1050) {
       MotorInput1 = MOTORS_CUTOFF;
