@@ -1,8 +1,16 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+// #define DEBUG_RATES
+// #define DEBUG_DESIRED_RATES
+// #define DEBUG_ERROR_RATES
+// #define DEBUG_RATE_ROLL
+// #define DEBUG_RATE_PITCH
+// #define DEBUG_RATE_YAW
+// #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
-#define DEBUG_ERROR_RATES
+// #define DEBUG_LOOP_TIMER
+// #define DEBUG_THROTTLE
 
 #define RX_THROTTLE_PWM_PIN 2
 #define RX_ROLL_PWM_PIN 3
@@ -16,17 +24,22 @@
 
 #define LED_PIN 13
 
-#define DELAY_MOTORS_SIGNAL_AFTER_MOTORS_POWER_UP 5000
-
 #define PWM_FREQUENCY 250
 
+#define MOTORS_CUTOFF 1000
 #define THROTTLE_MAX 1800
 #define MOTORS_MAX 20000
-#define THROTTLE_IDLE 1150
+#define THROTTLE_IDLE 1180
 
-#define P_PITCH 6
-#define P_ROLL 6
+#define P_ROLL 0.6
+#define P_PITCH 0.6
 #define P_YAW 2
+#define I_ROLL 3.5
+#define I_PITCH 3.5
+#define I_YAW 12
+#define D_ROLL 0.03
+#define D_PITCH 0.03
+#define D_YAW 0
 
 uint32_t LoopTimer;
 
@@ -36,26 +49,28 @@ float RateCalibrationPitch, RateCalibrationRoll, RateCalibrationYaw;
 volatile uint32_t lastRiseThrottle = 0, lastRiseRoll = 0, lastRisePitch = 0, lastRiseYaw = 0;
 volatile unsigned long InputThrottle = 0, DesiredRoll = 0, DesiredPitch = 0, DesiredYaw = 0;
 
+float RXRollCenter = 0;
+float RXPitchCenter = 0;
+float RXYawCenter = 0;
+
 float DesiredRatePitch, DesiredRateRoll, DesiredRateYaw;
 
 float ErrorRateRoll, ErrorRatePitch, ErrorRateYaw;
 
-float PIDReturn[] = {0, 0, 0};
-
-float InputRoll, InputPitch, InputYaw;
-
 float PrevErrorRateRoll = 0, PrevItermRateRoll = 0;
 float PrevErrorRatePitch = 0, PrevItermRatePitch = 0;
 float PrevErrorRateYaw = 0, PrevItermRateYaw = 0;
+
+float PIDReturn[] = {0, 0, 0};
+
+float InputRoll, InputPitch, InputYaw;
 
 int MotorInput1;
 int MotorInput2;
 int MotorInput3;
 int MotorInput4;
 
-float RXRollCenter = 0;
-float RXPitchCenter = 0;
-float RXYawCenter = 0;
+bool is_armed = false;
 
 void gyro_setup() {
   Wire.beginTransmission(0x68);
@@ -82,7 +97,6 @@ void gyro_signals() {
   int16_t GyroX=Wire.read()<<8 | Wire.read();
   int16_t GyroY=Wire.read()<<8 | Wire.read();
   int16_t GyroZ=Wire.read()<<8 | Wire.read();
-
   RateRoll=(float)GyroY/65.5;
   RatePitch=(float)GyroX/65.5;
   RateYaw=(float)GyroZ/65.5;
@@ -106,7 +120,6 @@ void isrThrottle() {
     lastRiseThrottle = micros();
   } else {
     InputThrottle = micros() - lastRiseThrottle;
-    if (InputThrottle > THROTTLE_MAX) InputThrottle = THROTTLE_MAX;
   }
 }
 void isrRoll() {
@@ -183,24 +196,16 @@ void setup() {
 
   analogWriteResolution(12);
 
-  // 1000 is for receiver not connected
-  // 1050 is for throttle not idle
-  while (InputThrottle > 1050 || InputThrottle < 1000) {
-    delay(20); // ELRS frequency in remote controller is 50Hz
-  }
+  analogWrite(MOTOR_1_PWM_PIN, InputThrottle);
+  analogWrite(MOTOR_2_PWM_PIN, InputThrottle);
+  analogWrite(MOTOR_3_PWM_PIN, InputThrottle);
+  analogWrite(MOTOR_4_PWM_PIN, InputThrottle);
 
   receiver_center_calibration();
 
-  LoopTimer=micros();
-
-  analogWrite(MOTOR_1_PWM_PIN, 1000);
-  analogWrite(MOTOR_2_PWM_PIN, 1000);
-  analogWrite(MOTOR_3_PWM_PIN, 1000);
-  analogWrite(MOTOR_4_PWM_PIN, 1000);
-
-  delay(DELAY_MOTORS_SIGNAL_AFTER_MOTORS_POWER_UP);
-
   digitalWrite(LED_PIN, LOW);
+
+  LoopTimer = micros();
 }
 
 void pid_equation(float Error, float P, float I, float D, float PrevError, float PrevIterm) {
@@ -248,42 +253,59 @@ void loop() {
   ErrorRatePitch = DesiredRatePitch - RatePitch;
   ErrorRateYaw = DesiredRateYaw - RateYaw;
 
-  pid_equation(ErrorRateRoll, P_ROLL, 0, 0, PrevErrorRateRoll, PrevItermRateRoll);
-  InputRoll = PIDReturn[0];
-  PrevErrorRateRoll = ErrorRateRoll;
-  PrevItermRateRoll = PIDReturn[2];
+  if (!is_armed) {
 
-  pid_equation(ErrorRatePitch, P_PITCH, 0, 0, PrevErrorRatePitch, PrevItermRatePitch);
-  InputPitch = PIDReturn[0];
-  PrevErrorRatePitch = ErrorRatePitch;
-  PrevItermRatePitch = PIDReturn[2];
+    // 1000 is for receiver not connected
+    // 1050 is for throttle not idle
+    if (InputThrottle > 1000 && InputThrottle < 1050) {
+      is_armed = true;
+    }
 
-  pid_equation(ErrorRateYaw, P_YAW, 0, 0, PrevErrorRateYaw, PrevItermRateYaw);
-  InputYaw = PIDReturn[0];
-  PrevErrorRateYaw = ErrorRateYaw;
-  PrevItermRateYaw = PIDReturn[2];
+    MotorInput1 = InputThrottle;
+    MotorInput2 = InputThrottle;
+    MotorInput3 = InputThrottle;
+    MotorInput4 = InputThrottle;
 
-  MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
-  MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
-  MotorInput3 = 1.024 * (InputThrottle + InputRoll + InputPitch + InputYaw);
-  MotorInput4 = 1.024 * (InputThrottle + InputRoll - InputPitch - InputYaw);
+  } else {
 
-  if (MotorInput1 > MOTORS_MAX) MotorInput1 = MOTORS_MAX;
-  if (MotorInput2 > MOTORS_MAX) MotorInput2 = MOTORS_MAX;
-  if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
-  if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
+    pid_equation(ErrorRateRoll, P_ROLL, I_ROLL, D_ROLL, PrevErrorRateRoll, PrevItermRateRoll);
+    InputRoll = PIDReturn[0];
+    PrevErrorRateRoll = ErrorRateRoll;
+    PrevItermRateRoll = PIDReturn[2];
 
-  if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
-  if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
-  if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
-  if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
+    pid_equation(ErrorRatePitch, P_PITCH, I_PITCH, D_PITCH, PrevErrorRatePitch, PrevItermRatePitch);
+    InputPitch = PIDReturn[0];
+    PrevErrorRatePitch = ErrorRatePitch;
+    PrevItermRatePitch = PIDReturn[2];
 
-  if (InputThrottle < 1050) {
-    MotorInput1 = 1000; 
-    MotorInput2 = 1000;
-    MotorInput3 = 1000; 
-    MotorInput4 = 1000;
-    reset_pid();
+    pid_equation(ErrorRateYaw, P_YAW, I_YAW, D_YAW, PrevErrorRateYaw, PrevItermRateYaw);
+    InputYaw = PIDReturn[0];
+    PrevErrorRateYaw = ErrorRateYaw;
+    PrevItermRateYaw = PIDReturn[2];
+
+    MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
+    MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
+    MotorInput3 = 1.024 * (InputThrottle + InputRoll + InputPitch + InputYaw);
+    MotorInput4 = 1.024 * (InputThrottle + InputRoll - InputPitch - InputYaw);
+
+    if (MotorInput1 > MOTORS_MAX) MotorInput1 = MOTORS_MAX;
+    if (MotorInput2 > MOTORS_MAX) MotorInput2 = MOTORS_MAX;
+    if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
+    if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
+
+    if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
+    if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
+    if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
+    if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
+
+    if (InputThrottle < 1050) {
+      MotorInput1 = MOTORS_CUTOFF;
+      MotorInput2 = MOTORS_CUTOFF;
+      MotorInput3 = MOTORS_CUTOFF;
+      MotorInput4 = MOTORS_CUTOFF;
+      reset_pid();
+    }
+
   }
 
   analogWrite(MOTOR_1_PWM_PIN, MotorInput1);
@@ -291,71 +313,81 @@ void loop() {
   analogWrite(MOTOR_3_PWM_PIN, MotorInput3);
   analogWrite(MOTOR_4_PWM_PIN, MotorInput4);
 
-  // Serial.println(
-  //                "Min:" + String(-75) +
-  //                ",Max:" + String(75) +
-  //                ",RatePitch:" + String(RatePitch) +
-  //                ",DesiredPitch:" + String(DesiredPitch) +
-  //                ",DesiredRatePitch:" + String(DesiredRatePitch) +
-  //                ",ErrorRatePitch:" + String(ErrorRatePitch) +
-  //                ",InputPitch:" + String(InputPitch)
-  // );
+// *************************************************************************************************
 
-#if defined(DEBUG_MOTORS)
-    Serial.println(
-                 "Min:" + String(1000) +
-                 ",Max:" + String(2000) +
-                 ",MotorInput1: " + String(MotorInput1) +
-                 ",MotorInput2: " + String(MotorInput2) +
-                 ",MotorInput3: " + String(MotorInput3) +
-                 ",MotorInput4: " + String(MotorInput4)
+#if defined(DEBUG_RATES)
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",RateRoll:" + String(RateRoll) +
+                 ",RatePitch:" + String(RatePitch) +
+                 ",RateYaw:" + String(RateYaw)
+  );
+#elif defined(DEBUG_DESIRED_RATES)
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",DesiredRateRoll:" + String(DesiredRateRoll) +
+                 ",DesireRatedPitch:" + String(DesiredRatePitch) +
+                 ",DesiredRateYaw:" + String(DesiredRateYaw)
   );
 #elif defined(DEBUG_ERROR_RATES)
   Serial.println(
                  "Min:" + String(-75) +
                  ",Max:" + String(75) +
+                 ",ErrorRateRoll:" + String(ErrorRateRoll) +
                  ",ErrorRatePitch:" + String(ErrorRatePitch) +
-                 ",ErrorRateYaw:" + String(ErrorRateYaw) +
+                 ",ErrorRateYaw:" + String(ErrorRateYaw)
+  );
+#elif defined(DEBUG_RATE_ROLL)
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",RateRoll:" + String(RateRoll) +
+                 ",DesiredRateRoll:" + String(DesiredRateRoll) +
                  ",ErrorRateRoll:" + String(ErrorRateRoll)
-                );
+  );
+#elif defined(DEBUG_RATE_PITCH)
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",RatePitch:" + String(RatePitch) +
+                 ",DesiredRatePitch:" + String(DesiredRatePitch) +
+                 ",ErrorRatePitch:" + String(ErrorRatePitch)
+  );
+#elif defined(DEBUG_RATE_YAW)
+  Serial.println(
+                 "Min:" + String(-75) +
+                 ",Max:" + String(75) +
+                 ",RateYaw:" + String(RateYaw) +
+                 ",DesiredRateYaw:" + String(DesiredRateYaw) +
+                 ",ErrorRateYaw:" + String(ErrorRateYaw)
+  );
+#elif defined(DEBUG_INPUTS)
+  Serial.println(
+                 "Min:" + String(0) +
+                 ",Max:" + String(500) +
+                 ",InputRoll:" + String(InputRoll) +
+                 ",InputPitch:" + String(InputPitch) +
+                 ",InputYaw:" + String(InputYaw)
+  );
+#elif defined(DEBUG_MOTORS)
+  Serial.println(
+                 "Min:" + String(1000) +
+                 ",Max:" + String(2000) +
+                 ",MotorInput1:" + String(MotorInput1) +
+                 ",MotorInput2:" + String(MotorInput2) +
+                 ",MotorInput3:" + String(MotorInput3) +
+                 ",MotorInput4:" + String(MotorInput4)
+  );
+#elif defined(DEBUG_THROTTLE)
+  Serial.println("InputThrottle:" + String(InputThrottle));
+#elif defined(DEBUG_LOOP_TIMER)
+  // LKG value: 841 us
+  Serial.println(String(micros() - LoopTimer));
 #endif
 
-  // Serial.println(
-  //                "Min:" + String(-75) +
-  //                ",Max:" + String(75) +
-  //                ",RatePitch:" + String(RatePitch) +
-  //                ",DesiredPitch:" + String(DesiredPitch) +
-  //                ",DesiredRatePitch:" + String(DesiredRatePitch) +
-  //                ",ErrorRatePitch:" + String(ErrorRatePitch) +
-  //                ",InputPitch:" + String(InputPitch)
-  // );
-
-  // Serial.println(
-  //                "Min:" + String(-75) +
-  //                ",Max:" + String(75) +
-  //                ",RateYaw:" + String(RateYaw) +
-  //                ",DesiredYaw:" + String(DesiredYaw) +
-  //                ",DesiredRateYaw:" + String(DesiredRateYaw) +
-  //                ",ErrorRateYaw:" + String(ErrorRateYaw) +
-  //                ",InputYaw:" + String(InputYaw)
-  // );
-
-  // Serial.println(
-  //                "Min:" + String(-75) +
-  //                ",Max:" + String(75) +
-  //                "RateRoll:" + String(RateRoll) +
-  //                ",DesiredRoll:" + String(DesiredRoll) +
-  //                ",DesiredRateRoll:" + String(DesiredRateRoll) +
-  //                ",ErrorRateRoll:" + String(ErrorRateRoll) +
-  //                ",InputRoll:" + String(InputRoll)
-  // );
-
-  // Serial.println(
-  //                ",InputThrottle:" + String(InputThrottle)
-  // );
-
-  // LKG value: 841 us
-  // Serial.println(String(micros() - LoopTimer));
+// *************************************************************************************************
 
   while (micros() - LoopTimer < 4000);
   LoopTimer = micros();

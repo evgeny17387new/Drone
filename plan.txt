@@ -1,6 +1,9 @@
+calibrate esc using dedicated code
+change start up power to 0.05
 measure gyro signals, check the noise
+check responsonse of pitch/roll/yaw axis
 implement algorithm for angle mode
 
 only after drone fly:
-buy psb to design new board
+design new board
 add sdcard to new psb
