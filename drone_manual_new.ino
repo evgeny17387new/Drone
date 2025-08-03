@@ -71,16 +71,19 @@ int MotorInput3;
 int MotorInput4;
 
 void gyro_setup() {
+  // Wake up the MPU6050
   Wire.beginTransmission(0x68);
   Wire.write(0x6B);
   Wire.write(0x00);
   Wire.endTransmission();
 
+  // Set DLPF to 5 Hz
   Wire.beginTransmission(0x68);
   Wire.write(0x1A);
   Wire.write(0x05);
   Wire.endTransmission();
 
+  // Set Gyro Full Scale Range to ±500 degrees/sec
   Wire.beginTransmission(0x68);
   Wire.write(0x1B);
   Wire.write(0x08);
