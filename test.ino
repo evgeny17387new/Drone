@@ -47,8 +47,8 @@ void gyro_signals(void) {
   AccY = (float)AccYLSB / 4096;
   AccZ = (float)AccZLSB / 4096;
 
-  AngleRoll = atan(AccY / sqrt(AccX * AccX + AccZ * AccZ)) * (180 / 3.142);
-  AnglePitch =- atan(AccX / sqrt(AccY * AccY + AccZ * AccZ)) * (180 / 3.142);
+  AngleRoll =- atan(AccX / sqrt(AccY * AccY + AccZ * AccZ)) * (180 / 3.142);
+  AnglePitch =- atan(AccY / sqrt(AccX * AccX + AccZ * AccZ)) * (180 / 3.142);
 }
 
 void loop() {
