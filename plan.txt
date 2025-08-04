@@ -1,7 +1,7 @@
+implement angle mode flight controller
 create git repo fo this project
 second seriese of carbon enthusiast
 add fpv camera
-implement angle mode flight controller
 new board with sd card
 switch to elrs protocol
 switch to dshot
