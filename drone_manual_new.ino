@@ -94,13 +94,13 @@ void gyro_signals() {
   Wire.beginTransmission(0x68);
   Wire.write(0x43);
   Wire.endTransmission(); 
-  Wire.requestFrom(0x68,6);
-  int16_t GyroX=Wire.read()<<8 | Wire.read();
-  int16_t GyroY=Wire.read()<<8 | Wire.read();
-  int16_t GyroZ=Wire.read()<<8 | Wire.read();
-  RateRoll=(float)GyroY/65.5;
-  RatePitch=(float)GyroX/65.5;
-  RateYaw=(float)GyroZ/65.5;
+  Wire.requestFrom(0x68, 6);
+  int16_t GyroX = Wire.read()<<8 | Wire.read();
+  int16_t GyroY = Wire.read()<<8 | Wire.read();
+  int16_t GyroZ = Wire.read()<<8 | Wire.read();
+  RateRoll = (float)GyroY / 65.5;
+  RatePitch = (float)GyroX / 65.5;
+  RateYaw = (float)GyroZ / 65.5;
 }
 
 void gyro_calibration() {
