@@ -1,15 +1,25 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#define FLIGHT_MODE_RATES 0
+#define FLIGHT_MODE_ANGLES 1
+char flight_mode = FLIGHT_MODE_ANGLES;
+
+// #define DEBUG_LOOP_TIMER
+
 // #define DEBUG_RATES
 // #define DEBUG_DESIRED_RATES
 // #define DEBUG_ERROR_RATES
 // #define DEBUG_RATE_ROLL
 // #define DEBUG_RATE_PITCH
 // #define DEBUG_RATE_YAW
-#define DEBUG_INPUTS
+
+#define DEBUG_ANGLES_ROLL
+// #define DEBUG_ANGLES_PITCH
+
+// #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
-// #define DEBUG_LOOP_TIMER
+
 // #define DEBUG_THROTTLE
 
 #define RX_THROTTLE_PWM_PIN 2
@@ -31,29 +41,48 @@
 #define MOTORS_MAX 20000
 #define THROTTLE_IDLE 1050
 
-#define P_ROLL 0.6
-#define P_PITCH 0.6
-#define P_YAW 2
-#define I_ROLL 3.5
-#define I_PITCH 3.5
-#define I_YAW 12
-#define D_ROLL 0.03
-#define D_PITCH 0.03
-#define D_YAW 0
+#define P_RATE_ROLL 0.6
+#define P_RATE_PITCH 0.6
+#define P_RATE_YAW 2
+#define I_RATE_ROLL 3.5
+#define I_RATE_PITCH 3.5
+#define I_RATE_YAW 12
+#define D_RATE_ROLL 0.03
+#define D_RATE_PITCH 0.03
+#define D_RATE_YAW 0
+
+#define P_ANGLE_ROLL 2
+#define P_ANGLE_PITCH 2
+#define I_ANGLE_ROLL 0
+#define I_ANGLE_PITCH 0
+#define D_ANGLE_ROLL 0
+#define D_ANGLE_PITCH 0
 
 uint32_t LoopTimer;
 
 float RatePitch, RateRoll, RateYaw;
 float RateCalibrationPitch, RateCalibrationRoll, RateCalibrationYaw;
 
+float AccX, AccY, AccZ;
+float AngleRollAccl, AnglePitchAccl;
+
 volatile uint32_t lastRiseThrottle = 0, lastRiseRoll = 0, lastRisePitch = 0, lastRiseYaw = 0;
 volatile unsigned long InputThrottle = 0, DesiredRoll = 0, DesiredPitch = 0, DesiredYaw = 0;
 
-float RXRollCenter = 0;
-float RXPitchCenter = 0;
-float RXYawCenter = 0;
+float RXRollCenter;
+float RXPitchCenter;
+float RXYawCenter;
+
+float AngleRollGyro = 0, AnglePitchGyro = 0;
+
+float Kalman1DOutput[] = {0, 0};
+
+float AngleRollKalman = 0, AnglePitchKalman = 0;
+float KalmanUncertaintyAngleRoll = 2 * 2;
+float KalmanUncertaintyAnglePitch = 2 * 2;
 
 float DesiredRatePitch, DesiredRateRoll, DesiredRateYaw;
+float DesiredAngleRoll, DesiredAnglePitch;
 
 float ErrorRateRoll, ErrorRatePitch, ErrorRateYaw;
 
@@ -61,7 +90,7 @@ float PrevErrorRateRoll = 0, PrevItermRateRoll = 0;
 float PrevErrorRatePitch = 0, PrevItermRatePitch = 0;
 float PrevErrorRateYaw = 0, PrevItermRateYaw = 0;
 
-float PIDReturn[] = {0, 0, 0};
+float PIDReturn[] = {0, 0};
 
 float InputRoll, InputPitch, InputYaw;
 
@@ -88,6 +117,12 @@ void gyro_setup() {
   Wire.write(0x1B);
   Wire.write(0x08);
   Wire.endTransmission();
+
+  // Set Accelerometer Full Scale Range to ±8g
+  Wire.beginTransmission(0x68);
+  Wire.write(0x1C);
+  Wire.write(0x10);
+  Wire.endTransmission();
 }
 
 void gyro_signals() {
@@ -95,25 +130,51 @@ void gyro_signals() {
   Wire.write(0x43);
   Wire.endTransmission(); 
   Wire.requestFrom(0x68, 6);
-  int16_t GyroX = Wire.read()<<8 | Wire.read();
-  int16_t GyroY = Wire.read()<<8 | Wire.read();
-  int16_t GyroZ = Wire.read()<<8 | Wire.read();
+  int16_t GyroX = Wire.read() << 8 | Wire.read();
+  int16_t GyroY = Wire.read() << 8 | Wire.read();
+  int16_t GyroZ = Wire.read() << 8 | Wire.read();
+
+  int16_t AccXLSB;
+  int16_t AccYLSB;
+  int16_t AccZLSB;
+
+  if (flight_mode == FLIGHT_MODE_ANGLES) {
+
+    Wire.beginTransmission(0x68);
+    Wire.write(0x3B);
+    Wire.endTransmission(); 
+    Wire.requestFrom(0x68, 6);
+    AccXLSB = Wire.read() << 8 | Wire.read();
+    AccYLSB = Wire.read() << 8 | Wire.read();
+    AccZLSB = Wire.read() << 8 | Wire.read();
+
+  }
+
   RateRoll = (float)GyroY / 65.5;
   RatePitch = (float)GyroX / 65.5;
   RateYaw = (float)GyroZ / 65.5;
+
+  if (flight_mode == FLIGHT_MODE_ANGLES) {
+
+    AccX = (float)AccXLSB / 4096;
+    AccY = (float)AccYLSB / 4096;
+    AccZ = (float)AccZLSB / 4096;
+
+  }
+
 }
 
 void gyro_calibration() {
-  for (int RateCalibrationNumber=0; RateCalibrationNumber<2000; RateCalibrationNumber ++) {
+  for (int RateCalibrationNumber = 0; RateCalibrationNumber < 2000; RateCalibrationNumber++) {
     gyro_signals();
-    RateCalibrationRoll+=RateRoll;
-    RateCalibrationPitch+=RatePitch;
-    RateCalibrationYaw+=RateYaw;
+    RateCalibrationRoll += RateRoll;
+    RateCalibrationPitch += RatePitch;
+    RateCalibrationYaw += RateYaw;
     delay(1);
   }
-  RateCalibrationRoll/=2000;
-  RateCalibrationPitch/=2000;
-  RateCalibrationYaw/=2000;
+  RateCalibrationRoll /= 2000;
+  RateCalibrationPitch /= 2000;
+  RateCalibrationYaw /= 2000;
 }
 
 // TODO: on rc disconnect, values may stay the same, need to implement rc connected check
@@ -154,16 +215,15 @@ void receiver_center_calibration() {
   RXRollCenter = 0;
   RXPitchCenter = 0;
   RXYawCenter = 0;
-  int samples = 2000;
-  for (int i = 0; i < samples; i++) {
+  for (int i = 0; i < 2000; i++) {
     RXRollCenter += DesiredRoll;
     RXPitchCenter += DesiredPitch;
     RXYawCenter += DesiredYaw;
     delay(1);
   }
-  RXRollCenter /= samples;
-  RXPitchCenter /= samples;
-  RXYawCenter /= samples;
+  RXRollCenter /= 2000;
+  RXPitchCenter /= 2000;
+  RXYawCenter /= 2000;
 }
 
 void setup() {
@@ -239,7 +299,7 @@ void pid_equation(float Error, float P, float I, float D, float PrevError, float
   else if (PIDOutput < -400) PIDOutput =- 400;
 
   PIDReturn[0] = PIDOutput;
-  PIDReturn[2] = Iterm;
+  PIDReturn[1] = Iterm;
 }
 
 void reset_pid(void) {
@@ -251,7 +311,26 @@ void reset_pid(void) {
   PrevItermRateYaw = 0;
 }
 
+void kalman_1d(float KalmanState, float KalmanUncertainty, float KalmanInput, float KalmanMeasurement) {
+
+  KalmanState = KalmanState + 0.004 * KalmanInput;
+
+  KalmanUncertainty = KalmanUncertainty + 0.004 * 0.004 * 4 * 4;
+
+  float KalmanGain = KalmanUncertainty * 1 / (1 * KalmanUncertainty + 3 * 3);
+
+  KalmanState = KalmanState + KalmanGain * (KalmanMeasurement - KalmanState);
+
+  KalmanUncertainty = (1 - KalmanGain) * KalmanUncertainty;
+
+  Kalman1DOutput[0] = KalmanState; 
+  Kalman1DOutput[1] = KalmanUncertainty;
+}
+
 void loop() {
+
+// ************************************************************************************************* Gyro signals
+
   gyro_signals();
   RateRoll-=RateCalibrationRoll;
   RatePitch-=RateCalibrationPitch;
@@ -261,29 +340,67 @@ void loop() {
   RatePitch = -RatePitch;
   RateYaw = -RateYaw;
 
-  // 0.15 of max/min of +-75 deg/sec rate
-  DesiredRateRoll = 0.15 * ((float)DesiredRoll - RXRollCenter);
-  DesiredRatePitch = 0.15 * ((float)DesiredPitch - RXPitchCenter);
+// ************************************************************************************************* Angles
+
+  if (flight_mode == FLIGHT_MODE_ANGLES) {
+
+    AngleRollAccl = -atan(AccX / sqrt(AccY * AccY + AccZ * AccZ)) * (180 / 3.142);
+    AnglePitchAccl = -atan(AccY / sqrt(AccX * AccX + AccZ * AccZ)) * (180 / 3.142);
+
+    AngleRollGyro = AngleRollGyro + 0.004 * RateRoll;
+    AnglePitchGyro = AnglePitchGyro + 0.004 * RatePitch;
+
+    kalman_1d(AngleRollKalman, KalmanUncertaintyAngleRoll, RateRoll, AngleRollAccl);
+    AngleRollKalman = Kalman1DOutput[0];
+    KalmanUncertaintyAngleRoll = Kalman1DOutput[1];
+
+    kalman_1d(AnglePitchKalman, KalmanUncertaintyAnglePitch, RatePitch, AnglePitchAccl);
+    AnglePitchKalman = Kalman1DOutput[0];
+    KalmanUncertaintyAnglePitch = Kalman1DOutput[1];
+
+    // 0.1 of max/min of +-50 deg angle
+    DesiredAngleRoll = 0.1 * ((float)DesiredRoll - RXRollCenter);
+    DesiredAnglePitch = 0.1 * ((float)DesiredPitch - RXPitchCenter);
+
+  }
+
+// ************************************************************************************************* Rates
+
+  if (flight_mode == FLIGHT_MODE_ANGLES) {
+
+    DesiredRateRoll = P_ANGLE_ROLL * (DesiredAngleRoll - AngleRollKalman);
+    DesiredRatePitch = P_ANGLE_PITCH * (DesiredAnglePitch - AnglePitchKalman);
+
+  } else {
+
+    // 0.15 of max/min of +-75 deg/sec rate
+    DesiredRateRoll = 0.15 * ((float)DesiredRoll - RXRollCenter);
+    DesiredRatePitch = 0.15 * ((float)DesiredPitch - RXPitchCenter);
+
+  }
+
   DesiredRateYaw = 0.15 * ((float)DesiredYaw - RXYawCenter);
 
   ErrorRateRoll = DesiredRateRoll - RateRoll;
   ErrorRatePitch = DesiredRatePitch - RatePitch;
   ErrorRateYaw = DesiredRateYaw - RateYaw;
 
-  pid_equation(ErrorRateRoll, P_ROLL, I_ROLL, D_ROLL, PrevErrorRateRoll, PrevItermRateRoll);
+  pid_equation(ErrorRateRoll, P_RATE_ROLL, I_RATE_ROLL, D_RATE_ROLL, PrevErrorRateRoll, PrevItermRateRoll);
   InputRoll = PIDReturn[0];
   PrevErrorRateRoll = ErrorRateRoll;
-  PrevItermRateRoll = PIDReturn[2];
+  PrevItermRateRoll = PIDReturn[1];
 
-  pid_equation(ErrorRatePitch, P_PITCH, I_PITCH, D_PITCH, PrevErrorRatePitch, PrevItermRatePitch);
+  pid_equation(ErrorRatePitch, P_RATE_PITCH, I_RATE_PITCH, D_RATE_PITCH, PrevErrorRatePitch, PrevItermRatePitch);
   InputPitch = PIDReturn[0];
   PrevErrorRatePitch = ErrorRatePitch;
-  PrevItermRatePitch = PIDReturn[2];
+  PrevItermRatePitch = PIDReturn[1];
 
-  pid_equation(ErrorRateYaw, P_YAW, I_YAW, D_YAW, PrevErrorRateYaw, PrevItermRateYaw);
+  pid_equation(ErrorRateYaw, P_RATE_YAW, I_RATE_YAW, D_RATE_YAW, PrevErrorRateYaw, PrevItermRateYaw);
   InputYaw = PIDReturn[0];
   PrevErrorRateYaw = ErrorRateYaw;
-  PrevItermRateYaw = PIDReturn[2];
+  PrevItermRateYaw = PIDReturn[1];
+
+// ************************************************************************************************* Motors
 
   MotorInput1 = 1.024 * (InputThrottle - InputRoll - InputPitch + InputYaw);
   MotorInput2 = 1.024 * (InputThrottle - InputRoll + InputPitch - InputYaw);
@@ -315,9 +432,14 @@ void loop() {
   analogWrite(MOTOR_3_PWM_PIN, MotorInput3);
   analogWrite(MOTOR_4_PWM_PIN, MotorInput4);
 
-// *************************************************************************************************
+// ************************************************************************************************* Debbugging
 
-#if defined(DEBUG_RATES)
+#if defined(DEBUG_LOOP_TIMER)
+  // LKG value:
+  // Rates mode: 841 us
+  // Angles mode: 1680 us
+  Serial.println(String(micros() - LoopTimer));
+#elif defined(DEBUG_RATES)
   Serial.println(
                  "Min:" + String(-75) +
                  ",Max:" + String(75) +
@@ -365,7 +487,23 @@ void loop() {
                  ",DesiredRateYaw:" + String(DesiredRateYaw) +
                  ",ErrorRateYaw:" + String(ErrorRateYaw)
   );
-#elif defined(DEBUG_INPUTS)
+#elif defined(DEBUG_ANGLES_ROLL)
+  Serial.println(
+                 "Min:" + String(-90) +
+                 ",Max:" + String(90) +
+                 ",AngleRollAccl:" + String(AngleRollAccl) +
+                 ",AngleRollGyro:" + String(AngleRollGyro) +
+                 ",AngleRollKalman:" + String(AngleRollKalman)
+  );
+#elif defined(DEBUG_ANGLES_PITCH)
+  Serial.println(
+                 "Min:" + String(-90) +
+                 ",Max:" + String(90) +
+                 ",AnglePitchAccl:" + String(AnglePitchAccl) +
+                 ",AnglePitchGyro:" + String(AnglePitchGyro) +
+                 ",AnglePitchKalman:" + String(AnglePitchKalman)
+  );
+  #elif defined(DEBUG_INPUTS)
   Serial.println(
                  "Min:" + String(0) +
                  ",Max:" + String(500) +
@@ -384,12 +522,9 @@ void loop() {
   );
 #elif defined(DEBUG_THROTTLE)
   Serial.println("InputThrottle:" + String(InputThrottle));
-#elif defined(DEBUG_LOOP_TIMER)
-  // LKG value: 841 us
-  Serial.println(String(micros() - LoopTimer));
 #endif
 
-// *************************************************************************************************
+// ************************************************************************************************* Lopp timer
 
   while (micros() - LoopTimer < 4000);
   LoopTimer = micros();

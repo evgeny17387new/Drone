@@ -1,8 +1,9 @@
-implement angle mode flight controller
-create git repo fo this project
+update git repo with more info
+test angles when motors are on
+test angle mode
 second seriese of carbon enthusiast
 add fpv camera
-new board with sd card
+new board with sd card, take measurements of angles
 switch to elrs protocol
 switch to dshot
-flash beyjay / am32
+flash beyjay / am32 once duplicate esc's are arriving
