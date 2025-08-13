@@ -152,32 +152,42 @@ void setup() {
   LoopTimer=micros();
 }
 void loop() {
+
   gyro_signals();
   RateRoll-=RateCalibrationRoll;
   RatePitch-=RateCalibrationPitch;
   RateYaw-=RateCalibrationYaw;
+
   kalman_1d(KalmanAngleRoll, KalmanUncertaintyAngleRoll, RateRoll, AngleRoll);
   KalmanAngleRoll=Kalman1DOutput[0]; KalmanUncertaintyAngleRoll=Kalman1DOutput[1];
+
   kalman_1d(KalmanAnglePitch, KalmanUncertaintyAnglePitch, RatePitch, AnglePitch);
   KalmanAnglePitch=Kalman1DOutput[0]; KalmanUncertaintyAnglePitch=Kalman1DOutput[1];
+
   read_receiver();
+
   DesiredAngleRoll=0.10*(ReceiverValue[0]-1500);
   DesiredAnglePitch=0.10*(ReceiverValue[1]-1500);
   InputThrottle=ReceiverValue[2];
   DesiredRateYaw=0.15*(ReceiverValue[3]-1500);
+
   ErrorAngleRoll=DesiredAngleRoll-KalmanAngleRoll;
   ErrorAnglePitch=DesiredAnglePitch-KalmanAnglePitch;
+
   pid_equation(ErrorAngleRoll, PAngleRoll, IAngleRoll, DAngleRoll, PrevErrorAngleRoll, PrevItermAngleRoll);     
   DesiredRateRoll=PIDReturn[0]; 
   PrevErrorAngleRoll=PIDReturn[1];
   PrevItermAngleRoll=PIDReturn[2];
+
   pid_equation(ErrorAnglePitch, PAnglePitch, IAnglePitch, DAnglePitch, PrevErrorAnglePitch, PrevItermAnglePitch);
   DesiredRatePitch=PIDReturn[0]; 
   PrevErrorAnglePitch=PIDReturn[1];
   PrevItermAnglePitch=PIDReturn[2];
+
   ErrorRateRoll=DesiredRateRoll-RateRoll;
   ErrorRatePitch=DesiredRatePitch-RatePitch;
   ErrorRateYaw=DesiredRateYaw-RateYaw;
+
   pid_equation(ErrorRateRoll, PRateRoll, IRateRoll, DRateRoll, PrevErrorRateRoll, PrevItermRateRoll);
        InputRoll=PIDReturn[0];
        PrevErrorRateRoll=PIDReturn[1]; 
@@ -190,20 +200,25 @@ void loop() {
        InputYaw=PIDReturn[0]; 
        PrevErrorRateYaw=PIDReturn[1]; 
        PrevItermRateYaw=PIDReturn[2];
+
   if (InputThrottle > 1800) InputThrottle = 1800;
+
   MotorInput1= 1.024*(InputThrottle-InputRoll-InputPitch-InputYaw);
   MotorInput2= 1.024*(InputThrottle-InputRoll+InputPitch+InputYaw);
   MotorInput3= 1.024*(InputThrottle+InputRoll+InputPitch-InputYaw);
   MotorInput4= 1.024*(InputThrottle+InputRoll-InputPitch+InputYaw);
+
   if (MotorInput1 > 2000)MotorInput1 = 1999;
   if (MotorInput2 > 2000)MotorInput2 = 1999; 
   if (MotorInput3 > 2000)MotorInput3 = 1999; 
   if (MotorInput4 > 2000)MotorInput4 = 1999;
+
   int ThrottleIdle=1180;
   if (MotorInput1 < ThrottleIdle) MotorInput1 = ThrottleIdle;
   if (MotorInput2 < ThrottleIdle) MotorInput2 = ThrottleIdle;
   if (MotorInput3 < ThrottleIdle) MotorInput3 = ThrottleIdle;
   if (MotorInput4 < ThrottleIdle) MotorInput4 = ThrottleIdle;
+
   int ThrottleCutOff=1000;
   if (ReceiverValue[2]<1050) {
     MotorInput1=ThrottleCutOff; 

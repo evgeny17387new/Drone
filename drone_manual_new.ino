@@ -13,13 +13,10 @@ char flight_mode = FLIGHT_MODE_ANGLES;
 // #define DEBUG_RATE_ROLL
 // #define DEBUG_RATE_PITCH
 // #define DEBUG_RATE_YAW
-
 #define DEBUG_ANGLES_ROLL
 // #define DEBUG_ANGLES_PITCH
-
 // #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
-
 // #define DEBUG_THROTTLE
 
 #define RX_THROTTLE_PWM_PIN 2

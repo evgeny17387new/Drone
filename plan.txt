@@ -1,6 +1,5 @@
-update git repo with more info
-test angles when motors are on
 test angle mode
+update git repo with more info
 second seriese of carbon enthusiast
 add fpv camera
 new board with sd card, take measurements of angles
