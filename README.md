@@ -1,4 +1,5 @@
 # Drone Project
+![Drone Image](drone.jpeg)
 
 This repository contains code and resources for a drone manual project.  
 The code is based on:  
