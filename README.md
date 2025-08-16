@@ -28,5 +28,5 @@ https://www.aliexpress.com/item/1005008130136207.html
 7. Battery - 2S  
 https://www.aliexpress.com/item/1005007558403107.html
 
-8. Remote Controller - Radio Master Pocket  
+8. Remote Controller - Radio Master Pocket, ELRS 2.4GHz  
 https://www.aliexpress.com/item/1005008011579904.html
