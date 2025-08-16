@@ -1,5 +1,6 @@
-test angle mode
-update git repo with more info
+test angle mode + upload vide to git repo
+add 3d design of the frame
+add scematic of boards
 second seriese of carbon enthusiast
 add fpv camera
 new board with sd card, take measurements of angles

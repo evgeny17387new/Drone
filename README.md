@@ -3,7 +3,7 @@
 
 This repository contains code and resources for a drone manual project.  
 The code is based on:  
-Carbon Aeronautics - Build and program this Arduino drone  
+Carbon Aeronautics - Build and program your own Arduino drone  
 https://www.youtube.com/watch?v=QvRxxjaLjxg&list=PLeuMA6tJBPKsAfRfFuGrEljpBow5hPVD4
 
 
