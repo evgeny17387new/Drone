@@ -1,3 +1,5 @@
+check why so many noise roll input
+find way to plot all signals at the same time
 test angle mode + upload vide to git repo
 add 3d design of the frame
 add scematic of boards

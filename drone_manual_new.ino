@@ -3,17 +3,16 @@
 
 #define FLIGHT_MODE_RATES 0
 #define FLIGHT_MODE_ANGLES 1
-char flight_mode = FLIGHT_MODE_ANGLES;
+char flight_mode = FLIGHT_MODE_RATES;
 
 // #define DEBUG_LOOP_TIMER
-
-// #define DEBUG_RATES
+#define DEBUG_RATES
 // #define DEBUG_DESIRED_RATES
 // #define DEBUG_ERROR_RATES
 // #define DEBUG_RATE_ROLL
 // #define DEBUG_RATE_PITCH
 // #define DEBUG_RATE_YAW
-#define DEBUG_ANGLES_ROLL
+// #define DEBUG_ANGLES_ROLL
 // #define DEBUG_ANGLES_PITCH
 // #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
@@ -35,8 +34,9 @@ char flight_mode = FLIGHT_MODE_ANGLES;
 
 #define MOTORS_CUTOFF 1000
 #define THROTTLE_MAX 1500
-#define MOTORS_MAX 20000
+#define MOTORS_MAX 1500
 #define THROTTLE_IDLE 1050
+#define MOTOR_IDLE 1050
 
 #define P_RATE_ROLL 0.6
 #define P_RATE_PITCH 0.6
@@ -50,10 +50,9 @@ char flight_mode = FLIGHT_MODE_ANGLES;
 
 #define P_ANGLE_ROLL 2
 #define P_ANGLE_PITCH 2
-#define I_ANGLE_ROLL 0
-#define I_ANGLE_PITCH 0
-#define D_ANGLE_ROLL 0
-#define D_ANGLE_PITCH 0
+
+#define PAUSE_TIME_RELAX_DRONE_SEC 5
+#define SEC_TO_MS 1000
 
 uint32_t LoopTimer;
 
@@ -236,7 +235,16 @@ void setup() {
 
   gyro_setup();
 
+  for (int i = 0; i < PAUSE_TIME_RELAX_DRONE_SEC; i++) {
+    Serial.println("Leave the drone relaxed for " + String(PAUSE_TIME_RELAX_DRONE_SEC - i) + " seconds...");
+    delay(SEC_TO_MS);
+  }
+
+  Serial.println("Starting gyro calibration...");
+
   gyro_calibration();
+
+  Serial.println("Gyro calibration done");
 
   pinMode(RX_THROTTLE_PWM_PIN, INPUT);
   pinMode(RX_ROLL_PWM_PIN, INPUT);
@@ -276,6 +284,8 @@ void setup() {
   Serial.println("Receiver connected, calibrating...");
 
   receiver_center_calibration();
+
+  Serial.println("Receiver calibration done");
 
   digitalWrite(LED_PIN, LOW);
 
@@ -409,11 +419,10 @@ void loop() {
   if (MotorInput3 > MOTORS_MAX) MotorInput3 = MOTORS_MAX;
   if (MotorInput4 > MOTORS_MAX) MotorInput4 = MOTORS_MAX;
 
-  // TODO: currently causing motors spin very fast
-  // if (MotorInput1 < THROTTLE_IDLE) MotorInput1 = THROTTLE_IDLE;
-  // if (MotorInput2 < THROTTLE_IDLE) MotorInput2 = THROTTLE_IDLE;
-  // if (MotorInput3 < THROTTLE_IDLE) MotorInput3 = THROTTLE_IDLE;
-  // if (MotorInput4 < THROTTLE_IDLE) MotorInput4 = THROTTLE_IDLE;
+  if (MotorInput1 < MOTOR_IDLE) MotorInput1 = MOTOR_IDLE;
+  if (MotorInput2 < MOTOR_IDLE) MotorInput2 = MOTOR_IDLE;
+  if (MotorInput3 < MOTOR_IDLE) MotorInput3 = MOTOR_IDLE;
+  if (MotorInput4 < MOTOR_IDLE) MotorInput4 = MOTOR_IDLE;
 
   // In case RC is disconnected, set motors to InputThrottle might be harmful
   if (InputThrottle < THROTTLE_IDLE) {
@@ -490,7 +499,8 @@ void loop() {
                  ",Max:" + String(90) +
                  ",AngleRollAccl:" + String(AngleRollAccl) +
                  ",AngleRollGyro:" + String(AngleRollGyro) +
-                 ",AngleRollKalman:" + String(AngleRollKalman)
+                 ",AngleRollKalman:" + String(AngleRollKalman) +
+                 ",DesiredAngleRoll:" + String(DesiredAngleRoll)
   );
 #elif defined(DEBUG_ANGLES_PITCH)
   Serial.println(
@@ -498,11 +508,12 @@ void loop() {
                  ",Max:" + String(90) +
                  ",AnglePitchAccl:" + String(AnglePitchAccl) +
                  ",AnglePitchGyro:" + String(AnglePitchGyro) +
-                 ",AnglePitchKalman:" + String(AnglePitchKalman)
+                 ",AnglePitchKalman:" + String(AnglePitchKalman) +
+                 ",DesiredAnglePitch:" + String(DesiredAnglePitch)
   );
   #elif defined(DEBUG_INPUTS)
   Serial.println(
-                 "Min:" + String(0) +
+                 "Min:" + String(-500) +
                  ",Max:" + String(500) +
                  ",InputRoll:" + String(InputRoll) +
                  ",InputPitch:" + String(InputPitch) +
