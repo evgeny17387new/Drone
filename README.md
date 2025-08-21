@@ -6,6 +6,10 @@ The code is based on:
 Carbon Aeronautics - Build and program your own Arduino drone  
 https://www.youtube.com/watch?v=QvRxxjaLjxg&list=PLeuMA6tJBPKsAfRfFuGrEljpBow5hPVD4
 
+## Videos
+1. First take off in angle mode  
+https://www.youtube.com/watch?v=qaAwmK13c40
+
 ## Parts
 1. MCU - Teensy 4.0  
 https://www.aliexpress.com/item/1005006850272944.html
