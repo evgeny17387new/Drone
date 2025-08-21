@@ -5,8 +5,8 @@
 #define FLIGHT_MODE_ANGLES 1
 char flight_mode = FLIGHT_MODE_RATES;
 
-// #define DEBUG_LOOP_TIMER
-#define DEBUG_RATES
+#define DEBUG_ALL
+// #define DEBUG_RATES
 // #define DEBUG_DESIRED_RATES
 // #define DEBUG_ERROR_RATES
 // #define DEBUG_RATE_ROLL
@@ -17,6 +17,8 @@ char flight_mode = FLIGHT_MODE_RATES;
 // #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
 // #define DEBUG_THROTTLE
+
+#define DEBUG_LOOP_TIMER
 
 #define RX_THROTTLE_PWM_PIN 2
 #define RX_ROLL_PWM_PIN 3
@@ -440,11 +442,16 @@ void loop() {
 
 // ************************************************************************************************* Debbugging
 
-#if defined(DEBUG_LOOP_TIMER)
-  // LKG value:
-  // Rates mode: 841 us
-  // Angles mode: 1680 us
-  Serial.println(String(micros() - LoopTimer));
+#if defined(DEBUG_ALL)
+  Serial.println(
+                 "RateRoll:" +      String(RateRoll) +
+                 ",RatePitch:" +    String(RatePitch) +
+                 ",RateYaw:" +      String(RateYaw) +
+                 ",MotorInput1:" +  String(MotorInput1) +
+                 ",MotorInput2:" +  String(MotorInput2) +
+                 ",MotorInput3:" +  String(MotorInput3) +
+                 ",MotorInput4:" +  String(MotorInput4)
+  );
 #elif defined(DEBUG_RATES)
   Serial.println(
                  "Min:" + String(-75) +
@@ -530,6 +537,13 @@ void loop() {
   );
 #elif defined(DEBUG_THROTTLE)
   Serial.println("InputThrottle:" + String(InputThrottle));
+#endif
+
+#if defined(DEBUG_LOOP_TIMER)
+  // LKG value:
+  // Rates mode: 841 us
+  // Angles mode: 1680 us
+  Serial.println("LoopTimer:" + String(micros() - LoopTimer));
 #endif
 
 // ************************************************************************************************* Lopp timer
