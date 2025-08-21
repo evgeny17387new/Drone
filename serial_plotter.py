@@ -16,6 +16,9 @@ lines = {}
 visible = {}
 fig, ax = plt.subplots()
 
+# Set legend to fixed position in upper left
+legend = ax.legend(loc='upper left')
+
 # Maximize window on start (Windows)
 try:
     mng = plt.get_current_fig_manager()
@@ -44,7 +47,7 @@ thread = threading.Thread(target=serial_reader, daemon=True)
 thread.start()
 
 check_buttons = None
-rax = plt.axes([0.01, 0.4, 0.13, 0.2])
+rax = plt.axes([0.01, 0.75, 0.13, 0.2])  # Fixed position in left upper corner
 
 # Callback for checkbox changes
 def func(label):
@@ -54,12 +57,17 @@ def func(label):
 
 def update_checkboxes():
     global check_buttons
-    # Remove old checkboxes if present
-    rax.clear()
+    # Instead of clearing and recreating, just update labels and states
     labels = list(visible.keys())
     states = [visible[l] for l in labels]
-    check_buttons = CheckButtons(rax, labels, states)
-    check_buttons.on_clicked(func)
+    if check_buttons is None:
+        check_buttons = CheckButtons(rax, labels, states)
+        check_buttons.on_clicked(func)
+    else:
+        # Update labels and states without recreating axes
+        check_buttons.labels = labels
+        for i, state in enumerate(states):
+            check_buttons.set_active(i) if state else check_buttons.set_active(i)
     plt.draw()
 
 def update(frame):
@@ -75,8 +83,6 @@ def update(frame):
         for pair in pairs:
             if ":" in pair:
                 label, value = pair.split(":", 1)
-                if label.strip().lower() == "looptimer":
-                    continue  # Ignore LoopTimer for plotting
                 try:
                     values[label] = float(value)
                 except ValueError:
@@ -90,7 +96,8 @@ def update(frame):
                 data[label] = []
                 lines[label] = ax.plot([], [], label=label)[0]
                 visible[label] = True
-                ax.legend()
+                # Update legend only once, keep it fixed
+                legend = ax.legend(loc='upper left')
                 new_labels = True
             data[label].append(val)
             # Limit to last SAMPLE_LIMIT points for performance
