@@ -96,8 +96,7 @@ def update(frame):
             if label not in data:
                 data[label] = []
                 lines[label] = ax.plot([], [], label=label)[0]
-                visible[label] = True
-                # Update legend only once, keep it fixed
+                visible[label] = False  # Hide by default
                 legend = ax.legend(loc='lower left')
                 new_labels = True
             data[label].append(val)
