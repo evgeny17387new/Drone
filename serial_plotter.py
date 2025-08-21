@@ -16,8 +16,8 @@ lines = {}
 visible = {}
 fig, ax = plt.subplots()
 
-# Set legend to fixed position in upper left
-legend = ax.legend(loc='upper left')
+# Set legend to fixed position in lower left
+legend = ax.legend(loc='lower left')
 
 # Maximize window on start (Windows)
 try:
@@ -47,7 +47,8 @@ thread = threading.Thread(target=serial_reader, daemon=True)
 thread.start()
 
 check_buttons = None
-rax = plt.axes([0.01, 0.75, 0.13, 0.2])  # Fixed position in left upper corner
+# Move checkboxes to upper right corner to avoid y-axis overlap
+rax = plt.axes([0.85, 0.75, 0.13, 0.2])  # Fixed position in left upper corner
 
 # Callback for checkbox changes
 def func(label):
@@ -97,7 +98,7 @@ def update(frame):
                 lines[label] = ax.plot([], [], label=label)[0]
                 visible[label] = True
                 # Update legend only once, keep it fixed
-                legend = ax.legend(loc='upper left')
+                legend = ax.legend(loc='lower left')
                 new_labels = True
             data[label].append(val)
             # Limit to last SAMPLE_LIMIT points for performance
@@ -107,6 +108,16 @@ def update(frame):
         for label in values:
             lines[label].set_data(xdata, data[label])
             lines[label].set_visible(visible[label])
+        # Autoscale y-axis based only on visible values
+        if xdata:
+            visible_points = []
+            for label in data:
+                if visible.get(label, False):
+                    visible_points.extend(data[label])
+            if visible_points:
+                ymin = min(visible_points)
+                ymax = max(visible_points)
+                ax.set_ylim(ymin, ymax)
         ax.relim()
         ax.autoscale_view()
         if new_labels:
