@@ -1,11 +1,10 @@
-check why so many noise roll input
-find way to plot all signals at the same time
-test angle mode + upload vide to git repo
-add 3d design of the frame
+figure out why soldering pads break
+check noise again after fix mpu, make sure noise roll/pitch is similar
 add scematic of boards
-second seriese of carbon enthusiast
+new board with sd card, take measurements of all signals
+debug bug where on start motors spin very slowly
 add fpv camera
-new board with sd card, take measurements of angles
 switch to elrs protocol
 switch to dshot
 flash beyjay / am32 once duplicate esc's are arriving
+second seriese of carbon enthusiast

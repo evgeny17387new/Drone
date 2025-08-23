@@ -10,6 +10,10 @@ https://www.youtube.com/watch?v=QvRxxjaLjxg&list=PLeuMA6tJBPKsAfRfFuGrEljpBow5hP
 1. First take off in angle mode  
 https://www.youtube.com/watch?v=qaAwmK13c40
 
+## Frame
+3d print stl  
+https://www.thingiverse.com/thing:7125649
+
 ## Parts
 1. MCU - Teensy 4.0  
 https://www.aliexpress.com/item/1005006850272944.html
