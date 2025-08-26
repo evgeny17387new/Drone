@@ -16,8 +16,8 @@ lines = {}
 visible = {}
 fig, ax = plt.subplots()
 
-# Set legend to fixed position in lower left
-legend = ax.legend(loc='lower left')
+# Set legend to fixed position in lower left with increased height and larger font
+legend = ax.legend(loc='lower left', bbox_to_anchor=(0, 0, 1, 2), fontsize='large')
 
 # Maximize window on start (Windows)
 try:
@@ -47,8 +47,8 @@ thread = threading.Thread(target=serial_reader, daemon=True)
 thread.start()
 
 check_buttons = None
-# Move checkboxes to upper right corner to avoid y-axis overlap
-rax = plt.axes([0.85, 0.75, 0.13, 0.2])  # Fixed position in left upper corner
+# Move checkboxes to upper right corner and make them twice as tall, but lower
+rax = plt.axes([0.85, 0.35, 0.13, 0.4])  # Fixed position in left upper corner
 
 # Callback for checkbox changes
 def func(label):
@@ -97,7 +97,7 @@ def update(frame):
                 data[label] = []
                 lines[label] = ax.plot([], [], label=label)[0]
                 visible[label] = False  # Hide by default
-                legend = ax.legend(loc='lower left')
+                legend = ax.legend(loc='lower left', bbox_to_anchor=(0, 0, 1, 2), fontsize='large')
                 new_labels = True
             data[label].append(val)
             # Limit to last SAMPLE_LIMIT points for performance

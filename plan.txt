@@ -1,8 +1,14 @@
-figure out why soldering pads break
+soldering pads are breaking:
+1. when throttle/motors max at - 1450
+2. buy flux paste, try to put on the spldering pads
+3. maybe because batteris is 2s instead of 1s - test esc * motor alone with 1s battery vs 2s battery
+
+debug bug where on start motors spin very slowly - no mpu values, something bad on gyto start, add some warning ? always happens on first start with battery, second start is fine
+1. try add pause of 1 sec before turn on the gyro
+
 check noise again after fix mpu, make sure noise roll/pitch is similar
 add scematic of boards
-new board with sd card, take measurements of all signals
-debug bug where on start motors spin very slowly
+new board with sd card (maybe bluethooth), take measurements of all signals
 add fpv camera
 switch to elrs protocol
 switch to dshot

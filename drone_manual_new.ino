@@ -3,10 +3,10 @@
 
 #define FLIGHT_MODE_RATES 0
 #define FLIGHT_MODE_ANGLES 1
-char flight_mode = FLIGHT_MODE_RATES;
+char flight_mode = FLIGHT_MODE_ANGLES;
 
-// #define DEBUG_LOOP_TIMER
-#define DEBUG_RATES
+#define DEBUG_ALL
+// #define DEBUG_RATES
 // #define DEBUG_DESIRED_RATES
 // #define DEBUG_ERROR_RATES
 // #define DEBUG_RATE_ROLL
@@ -17,6 +17,10 @@ char flight_mode = FLIGHT_MODE_RATES;
 // #define DEBUG_INPUTS
 // #define DEBUG_MOTORS
 // #define DEBUG_THROTTLE
+
+// #define DEBUG_LOOP_TIMER
+
+// #define DEBUG_SET_MOTORS_DIRECTLY_TO_THROTTLE
 
 #define RX_THROTTLE_PWM_PIN 2
 #define RX_ROLL_PWM_PIN 3
@@ -32,11 +36,11 @@ char flight_mode = FLIGHT_MODE_RATES;
 
 #define PWM_FREQUENCY 250
 
-#define MOTORS_CUTOFF 1000
-#define THROTTLE_MAX 1500
-#define MOTORS_MAX 1500
+#define THROTTLE_MAX 1475
+#define MOTORS_MAX 1475
 #define THROTTLE_IDLE 1050
 #define MOTOR_IDLE 1050
+#define MOTORS_CUTOFF 1000
 
 #define P_RATE_ROLL 0.6
 #define P_RATE_PITCH 0.6
@@ -229,6 +233,11 @@ void setup() {
 
   Serial.begin(115200);
 
+  Serial.println("Setup starting...");
+
+  // To avoid gyro starts after teensy
+  delay(1000);
+
   Wire.setClock(400000);
   Wire.begin();
   delay(250);
@@ -239,6 +248,10 @@ void setup() {
     Serial.println("Leave the drone relaxed for " + String(PAUSE_TIME_RELAX_DRONE_SEC - i) + " seconds...");
     delay(SEC_TO_MS);
   }
+
+  digitalWrite(LED_PIN, LOW);
+  delay(250);
+  digitalWrite(LED_PIN, HIGH);
 
   Serial.println("Starting gyro calibration...");
 
@@ -433,6 +446,13 @@ void loop() {
     reset_pid();
   }
 
+#ifdef DEBUG_SET_MOTORS_DIRECTLY_TO_THROTTLE
+  MotorInput1 = InputThrottle;
+  MotorInput2 = InputThrottle;
+  MotorInput3 = InputThrottle;
+  MotorInput4 = InputThrottle;
+#endif
+
   analogWrite(MOTOR_1_PWM_PIN, MotorInput1);
   analogWrite(MOTOR_2_PWM_PIN, MotorInput2);
   analogWrite(MOTOR_3_PWM_PIN, MotorInput3);
@@ -440,17 +460,61 @@ void loop() {
 
 // ************************************************************************************************* Debbugging
 
-#if defined(DEBUG_LOOP_TIMER)
-  // LKG value:
-  // Rates mode: 841 us
-  // Angles mode: 1680 us
-  Serial.println(String(micros() - LoopTimer));
+#if defined(DEBUG_ALL)
+  Serial.println(
+                 "InputThrottle:" + String(InputThrottle) +
+
+                 ",MotorInput1:" + String(MotorInput1) +
+                 ",MotorInput2:" + String(MotorInput2) +
+                 ",MotorInput3:" + String(MotorInput3) +
+                 ",MotorInput4:" + String(MotorInput4) +
+
+                 ",InputRoll:" + String(InputRoll) +
+                 ",InputPitch:" + String(InputPitch) +
+                 ",InputYaw:" + String(InputYaw) +
+
+                 ",ErrorRateRoll:" + String(ErrorRateRoll) +
+                 ",ErrorRatePitch:" + String(ErrorRatePitch) +
+                 ",ErrorRateYaw:" + String(ErrorRateYaw) +
+
+                 ",RateRoll:" + String(RateRoll) +
+                 ",RatePitch:" + String(RatePitch) +
+                 ",RateYaw:" + String(RateYaw) +
+
+                 ",DesiredRateRoll:" + String(DesiredRateRoll) +
+                 ",DesireRatedPitch:" + String(DesiredRatePitch) +
+                 ",DesiredRateYaw:" + String(DesiredRateYaw) +
+
+                 ",RXRollCenter:" + String(RXRollCenter) +
+                 ",RXPitchCenter:" + String(RXPitchCenter) +
+                 ",RXYawCenter:" + String(RXYawCenter) +
+
+                 ",DesiredRoll:" + String(DesiredRoll) +
+                 ",DesiredPitch:" + String(DesiredPitch) +
+                 ",DesiredYaw:" + String(DesiredYaw) +
+
+                 ",AngleRollAccl:" + String(AngleRollAccl) +
+                 ",AnglePitchAccl:" + String(AnglePitchAccl) +
+
+                 ",AngleRollGyro:" + String(AngleRollGyro) +
+                 ",AnglePitchGyro:" + String(AnglePitchGyro) +
+
+                 ",AngleRollKalman:" + String(AngleRollKalman) +
+                 ",AnglePitchKalman:" + String(AnglePitchKalman) +
+
+                 ",DesiredAngleRoll:" + String(DesiredAngleRoll) +
+                 ",DesiredAnglePitch:" + String(DesiredAnglePitch) +
+
+                 ",AccX:" + String(AccX) +
+                 ",AccY:" + String(AccY) +
+                 ",AccZ:" + String(AccZ)
+  );
 #elif defined(DEBUG_RATES)
   Serial.println(
                  "Min:" + String(-75) +
                  ",Max:" + String(75) +
                  ",RateRoll:" + String(RateRoll) +
-                       ",RatePitch:" + String(RatePitch) +
+                 ",RatePitch:" + String(RatePitch) +
                  ",RateYaw:" + String(RateYaw)
   );
 #elif defined(DEBUG_DESIRED_RATES)
@@ -530,6 +594,13 @@ void loop() {
   );
 #elif defined(DEBUG_THROTTLE)
   Serial.println("InputThrottle:" + String(InputThrottle));
+#endif
+
+#if defined(DEBUG_LOOP_TIMER)
+  // LKG value:
+  // Rates mode: 841 us
+  // Angles mode: 1680 us
+  Serial.println(String(micros() - LoopTimer));
 #endif
 
 // ************************************************************************************************* Lopp timer
